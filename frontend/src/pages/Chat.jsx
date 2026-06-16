@@ -38,10 +38,10 @@ export default function Chat() {
       <aside className="w-64 border-r border-gray-800 flex flex-col">
         <div className="p-4 border-b border-gray-800">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(session?.collection_id ? `/collections/${session.collection_id}` : '/dashboard')}
             className="text-gray-400 hover:text-white text-sm transition-colors"
           >
-            ← Dashboard
+            ← Collection
           </button>
         </div>
         <SessionList activeSessionId={sessionId} collectionId={session?.collection_id} />

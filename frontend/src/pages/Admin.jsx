@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import PageWrapper from '../components/layout/PageWrapper'
 import adminService from '../services/adminService'
 
@@ -28,6 +29,7 @@ function fmtDate(iso) {
 }
 
 export default function Admin() {
+  const navigate = useNavigate()
   const { data: usage, isLoading: usageLoading } = useQuery({
     queryKey: ['admin-usage'],
     queryFn: adminService.getUsage,
@@ -47,6 +49,12 @@ export default function Admin() {
   return (
     <PageWrapper title="Admin">
       <div className="mb-6">
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1 transition-colors"
+        >
+          ← Back to Collections
+        </button>
         <h1 className="text-2xl font-bold text-white">Usage &amp; Cost Dashboard</h1>
         <p className="text-gray-400 text-sm mt-1">Token usage, query latency, and cost per user.</p>
       </div>
