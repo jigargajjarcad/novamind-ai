@@ -21,7 +21,9 @@ export default function Navbar() {
 
       <div className="flex items-center gap-4">
         {user?.full_name && (
-          <span className="text-gray-400 text-sm">{user.full_name}</span>
+          <Link to="/profile" className="text-gray-400 hover:text-white text-sm transition-colors">
+            {user.full_name}
+          </Link>
         )}
         <Link to="/admin" className="text-gray-400 hover:text-white text-sm transition-colors">
           Admin

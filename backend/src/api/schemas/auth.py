@@ -46,3 +46,29 @@ class VerifyEmailRequest(BaseModel):
 
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: str | None = None
+
+
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class ProfileStatsResponse(BaseModel):
+    member_since: datetime
+    total_queries: int
+
+
+class ProfileResponse(BaseModel):
+    user: UserResponse
+    stats: ProfileStatsResponse

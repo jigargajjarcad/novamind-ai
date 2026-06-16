@@ -75,6 +75,12 @@ class ChatRepository:
         await self.db.delete(session)
         await self.db.commit()
 
+    async def get_query_count_for_user(self, user_id: uuid.UUID) -> int:
+        result = await self.db.execute(
+            select(func.count(QueryLog.id)).where(QueryLog.user_id == user_id)
+        )
+        return result.scalar() or 0
+
     # --- Admin aggregation queries ---
 
     async def get_summary_stats(self) -> dict:

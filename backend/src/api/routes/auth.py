@@ -7,9 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.schemas.auth import (
     LoginRequest,
     LoginResponse,
+    ProfileResponse,
     RegisterRequest,
     RegisterResponse,
     ResendVerificationRequest,
+    UpdatePasswordRequest,
+    UpdateProfileRequest,
     UserResponse,
     VerifyEmailRequest,
 )
@@ -56,3 +59,34 @@ async def me(
 ):
     service = AuthService(db)
     return await service.get_current_user(user_id)
+
+
+@router.get("/profile", response_model=ProfileResponse)
+async def get_profile(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AuthService(db)
+    return await service.get_profile(user_id)
+
+
+@router.patch("/profile", response_model=UserResponse)
+async def update_profile(
+    body: UpdateProfileRequest,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    logger.debug("auth.profile.update_request", user_id=str(user_id))
+    service = AuthService(db)
+    return await service.update_profile(user_id, body)
+
+
+@router.patch("/password", status_code=204)
+async def change_password(
+    body: UpdatePasswordRequest,
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    logger.debug("auth.password.change_request", user_id=str(user_id))
+    service = AuthService(db)
+    await service.change_password(user_id, body)

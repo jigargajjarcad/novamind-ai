@@ -24,6 +24,20 @@ const authService = {
   async resendVerification(email) {
     await api.post('/auth/resend-verification', { email })
   },
+
+  async getProfile() {
+    const res = await api.get('/auth/profile')
+    return res.data
+  },
+
+  async updateProfile(data) {
+    const res = await api.patch('/auth/profile', data)
+    return res.data
+  },
+
+  async changePassword(data) {
+    await api.patch('/auth/password', data)
+  },
 }
 
 export default authService

@@ -5,17 +5,29 @@ from datetime import datetime, timedelta, timezone
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, UserResponse
+from src.api.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    ProfileResponse,
+    ProfileStatsResponse,
+    RegisterRequest,
+    RegisterResponse,
+    UpdatePasswordRequest,
+    UpdateProfileRequest,
+    UserResponse,
+)
 from src.core.exceptions import (
     EmailAlreadyExistsError,
     EmailNotVerifiedError,
     InvalidCredentialsError,
+    InvalidPasswordError,
     RateLimitError,
     TokenExpiredError,
     TokenInvalidError,
     UserNotFoundError,
 )
 from src.core.security import create_access_token, hash_password, verify_password
+from src.db.repositories.chat_repository import ChatRepository
 from src.db.repositories.user_repository import UserRepository
 from src.services import email_service
 
@@ -28,6 +40,7 @@ _RESEND_COOLDOWN_SECONDS = 60
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.user_repo = UserRepository(db)
+        self.chat_repo = ChatRepository(db)
 
     async def register(self, data: RegisterRequest) -> RegisterResponse:
         existing = await self.user_repo.get_by_email(data.email)
@@ -84,11 +97,9 @@ class AuthService:
 
     async def resend_verification(self, email: str) -> None:
         user = await self.user_repo.get_by_email(email)
-        # Never reveal whether the email exists or is already verified
         if not user or user.is_verified:
             return
 
-        # Rate-limit: token was generated at (expires_at - 24h), reject if < 60s ago
         if user.verification_token_expires_at:
             sent_at = user.verification_token_expires_at - timedelta(hours=_VERIFICATION_TTL_HOURS)
             elapsed = (datetime.now(timezone.utc) - sent_at).total_seconds()
@@ -108,3 +119,37 @@ class AuthService:
         if not user:
             raise UserNotFoundError("User not found")
         return UserResponse.model_validate(user)
+
+    async def get_profile(self, user_id: uuid.UUID) -> ProfileResponse:
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError("User not found")
+        total_queries = await self.chat_repo.get_query_count_for_user(user_id)
+        return ProfileResponse(
+            user=UserResponse.model_validate(user),
+            stats=ProfileStatsResponse(
+                member_since=user.created_at,
+                total_queries=total_queries,
+            ),
+        )
+
+    async def update_profile(self, user_id: uuid.UUID, data: UpdateProfileRequest) -> UserResponse:
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError("User not found")
+        if data.full_name is not None:
+            user.full_name = data.full_name
+        await self.user_repo.save(user)
+        logger.info("auth.profile.updated", user_id=str(user_id))
+        return UserResponse.model_validate(user)
+
+    async def change_password(self, user_id: uuid.UUID, data: UpdatePasswordRequest) -> None:
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError("User not found")
+        if not verify_password(data.current_password, user.password_hash):
+            logger.warning("auth.password.change_failed", user_id=str(user_id))
+            raise InvalidPasswordError("Current password is incorrect")
+        user.password_hash = hash_password(data.new_password)
+        await self.user_repo.save(user)
+        logger.info("auth.password.changed", user_id=str(user_id))

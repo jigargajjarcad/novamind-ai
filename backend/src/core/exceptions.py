@@ -70,6 +70,11 @@ class EmailNotVerifiedError(ForbiddenError):
     code = "EMAIL_NOT_VERIFIED"
 
 
+class InvalidPasswordError(AppException):
+    code = "INVALID_PASSWORD"
+    status_code = 400
+
+
 class TokenInvalidError(AppException):
     code = "TOKEN_INVALID"
     status_code = 400
