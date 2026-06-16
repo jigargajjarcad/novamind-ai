@@ -2,6 +2,7 @@ import uuid
 
 import structlog
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.schemas.chat import (
@@ -50,7 +51,7 @@ async def get_session(
     return await service.get_session(session_id, user_id)
 
 
-@router.post("/sessions/{session_id}/messages", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/sessions/{session_id}/messages")
 async def send_message(
     session_id: uuid.UUID,
     body: SendMessageRequest,
@@ -58,12 +59,32 @@ async def send_message(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns a Server-Sent Events stream with chunk, citations, and done events.
-    Week 3: Full RAG pipeline and SSE streaming implemented here.
+    Stream a RAG-grounded response as Server-Sent Events.
+
+    Event types:
+      chunk      — incremental text from Claude: {"text": "..."}
+      citations  — retrieved context blocks after streaming completes
+      done       — final summary: message_id, token counts, cost, latency
+      error      — on failure: {"code": "...", "message": "..."}
     """
-    logger.debug("chat.message.send.request", session_id=str(session_id), user_id=str(user_id))
-    # Week 3: return EventSourceResponse with RAG pipeline stream
-    return {"status": "streaming not yet implemented — Week 3"}
+    logger.debug(
+        "chat.message.send.request",
+        session_id=str(session_id),
+        user_id=str(user_id),
+        content_len=len(body.content),
+    )
+    service = ChatService(db)
+    event_stream = await service.stream_message(session_id, user_id, body.content)
+
+    return StreamingResponse(
+        event_stream,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable nginx response buffering
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

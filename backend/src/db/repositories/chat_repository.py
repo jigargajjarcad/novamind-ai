@@ -42,6 +42,17 @@ class ChatRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_recent_messages(self, session_id: uuid.UUID, limit: int = 6) -> list[ChatMessage]:
+        """Returns up to `limit` most recent messages in chronological order (oldest first)."""
+        result = await self.db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(limit)
+        )
+        messages = list(result.scalars().all())
+        return list(reversed(messages))
+
     async def create_message(self, session_id: uuid.UUID, role: str, content: str) -> ChatMessage:
         message = ChatMessage(session_id=session_id, role=role, content=content)
         self.db.add(message)

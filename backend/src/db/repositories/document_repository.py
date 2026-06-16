@@ -1,10 +1,23 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.document import Document, DocumentChunk, ChunkEmbedding
+from src.models.document import ChunkEmbedding, Document, DocumentChunk
+
+
+@dataclass
+class ChunkSearchResult:
+    """Flat result from the pgvector similarity search, includes document filename."""
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    filename: str
+    content: str
+    chunk_index: int
+    page_number: int | None
+    distance: float  # cosine distance — lower is more similar
 
 
 class DocumentRepository:
@@ -84,3 +97,54 @@ class DocumentRepository:
         self.db.add_all(embeddings)
         await self.db.commit()
         return embeddings
+
+    async def search_similar_chunks(
+        self,
+        collection_id: uuid.UUID,
+        query_embedding: list[float],
+        top_k: int = 10,
+    ) -> list[ChunkSearchResult]:
+        """
+        Cosine similarity search via pgvector HNSW index.
+        Returns results ordered by ascending distance (most similar first).
+        Only searches chunks from status='ready' documents in the given collection.
+        """
+        sql = text("""
+            SELECT
+                dc.id          AS chunk_id,
+                dc.document_id,
+                d.filename,
+                dc.content,
+                dc.chunk_index,
+                dc.page_number,
+                ce.embedding <=> CAST(:query_vec AS vector) AS distance
+            FROM document_chunks dc
+            JOIN chunk_embeddings ce ON dc.id = ce.chunk_id
+            JOIN documents d ON dc.document_id = d.id
+            WHERE d.collection_id = CAST(:collection_id AS uuid)
+              AND d.status = 'ready'
+            ORDER BY distance ASC
+            LIMIT :top_k
+        """)
+
+        result = await self.db.execute(
+            sql,
+            {
+                "query_vec": str(query_embedding),
+                "collection_id": str(collection_id),
+                "top_k": top_k,
+            },
+        )
+
+        return [
+            ChunkSearchResult(
+                chunk_id=row.chunk_id,
+                document_id=row.document_id,
+                filename=row.filename,
+                content=row.content,
+                chunk_index=row.chunk_index,
+                page_number=row.page_number,
+                distance=float(row.distance),
+            )
+            for row in result.fetchall()
+        ]
