@@ -12,6 +12,9 @@ export default function ChatWindow({ session }) {
   const [streamingText, setStreamingText] = useState('')
   const [citations, setCitations] = useState([])
   const bottomRef = useRef(null)
+  // Refs track accumulated values so onDone closure always reads the final state
+  const streamingTextRef = useRef('')
+  const citationsRef = useRef([])
 
   useEffect(() => {
     setMessages(session?.messages ?? [])
@@ -26,27 +29,36 @@ export default function ChatWindow({ session }) {
     setMessages((prev) => [...prev, userMsg])
     setStreamingText('')
     setCitations([])
+    streamingTextRef.current = ''
+    citationsRef.current = []
 
     stream({
       url: chatService.getMessageStreamUrl(session.id),
       body: { content },
-      onChunk: (text) => setStreamingText((prev) => prev + text),
-      onCitations: (data) => setCitations(data),
-      onDone: () => {
+      onChunk: (text) => {
+        streamingTextRef.current += text
+        setStreamingText((prev) => prev + text)
+      },
+      onCitations: (data) => {
+        citationsRef.current = data
+        setCitations(data)
+      },
+      onDone: (doneData) => {
         setMessages((prev) => [
           ...prev,
           {
-            id: Date.now() + 1,
+            id: doneData?.message_id ?? Date.now() + 1,
             role: 'assistant',
-            content: streamingText,
+            content: streamingTextRef.current,
             created_at: new Date().toISOString(),
-            citations,
+            citations: citationsRef.current,
           },
         ])
         setStreamingText('')
+        setCitations([])
         queryClient.invalidateQueries({ queryKey: ['chat-session', session.id] })
       },
-      onError: (err) => {
+      onError: () => {
         setMessages((prev) => [
           ...prev,
           {
@@ -58,6 +70,7 @@ export default function ChatWindow({ session }) {
           },
         ])
         setStreamingText('')
+        setCitations([])
       },
     })
   }

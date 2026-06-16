@@ -1,10 +1,11 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.models.chat import ChatMessage, ChatSession, MessageCitation, QueryLog
+from src.models.user import User
 
 
 class ChatRepository:
@@ -74,13 +75,81 @@ class ChatRepository:
         await self.db.delete(session)
         await self.db.commit()
 
+    # --- Admin aggregation queries ---
+
+    async def get_summary_stats(self) -> dict:
+        result = await self.db.execute(
+            select(
+                func.count(QueryLog.id).label("total_queries"),
+                func.coalesce(func.sum(QueryLog.input_tokens), 0).label("total_input_tokens"),
+                func.coalesce(func.sum(QueryLog.output_tokens), 0).label("total_output_tokens"),
+                func.coalesce(func.sum(QueryLog.cost_usd), 0).label("total_cost_usd"),
+                func.coalesce(func.avg(QueryLog.latency_ms), 0).label("avg_latency_ms"),
+            )
+        )
+        row = result.one()
+        return {
+            "total_queries": row.total_queries,
+            "total_input_tokens": int(row.total_input_tokens),
+            "total_output_tokens": int(row.total_output_tokens),
+            "total_cost_usd": float(row.total_cost_usd),
+            "avg_latency_ms": float(row.avg_latency_ms),
+        }
+
     async def get_usage_by_user(self) -> list[dict]:
         result = await self.db.execute(
             select(
-                QueryLog.user_id,
+                User.email,
+                func.count(QueryLog.id).label("query_count"),
+                func.coalesce(func.sum(QueryLog.input_tokens), 0).label("total_input_tokens"),
+                func.coalesce(func.sum(QueryLog.output_tokens), 0).label("total_output_tokens"),
+                func.coalesce(func.sum(QueryLog.cost_usd), 0).label("total_cost_usd"),
+            )
+            .select_from(QueryLog)
+            .join(User, QueryLog.user_id == User.id)
+            .group_by(User.email)
+            .order_by(func.sum(QueryLog.cost_usd).desc())
+        )
+        return [
+            {
+                "email": row.email,
+                "query_count": row.query_count,
+                "total_input_tokens": int(row.total_input_tokens),
+                "total_output_tokens": int(row.total_output_tokens),
+                "total_cost_usd": float(row.total_cost_usd),
+            }
+            for row in result.all()
+        ]
+
+    async def get_recent_query_log(self, limit: int = 50) -> list[dict]:
+        result = await self.db.execute(
+            select(
+                QueryLog.id,
+                QueryLog.query,
+                QueryLog.chunks_retrieved,
                 QueryLog.input_tokens,
                 QueryLog.output_tokens,
                 QueryLog.cost_usd,
+                QueryLog.latency_ms,
+                QueryLog.created_at,
+                User.email.label("user_email"),
             )
+            .select_from(QueryLog)
+            .outerjoin(User, QueryLog.user_id == User.id)
+            .order_by(QueryLog.created_at.desc())
+            .limit(limit)
         )
-        return [dict(row._mapping) for row in result.all()]
+        return [
+            {
+                "id": str(row.id),
+                "query": row.query[:100] + "…" if len(row.query) > 100 else row.query,
+                "user_email": row.user_email,
+                "chunks_retrieved": row.chunks_retrieved,
+                "input_tokens": row.input_tokens,
+                "output_tokens": row.output_tokens,
+                "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+                "latency_ms": row.latency_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in result.all()
+        ]

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.security import get_current_user_id
 from src.db.database import get_db
+from src.db.repositories.chat_repository import ChatRepository
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -16,12 +17,12 @@ async def get_usage(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Aggregated token usage and cost per user.
-    Week 4: Full admin dashboard queries implemented here.
-    """
+    """Aggregated token usage and cost: summary stats + per-user breakdown."""
     logger.debug("admin.usage.request", user_id=str(user_id))
-    return {"status": "admin panel implemented in Week 4"}
+    repo = ChatRepository(db)
+    summary = await repo.get_summary_stats()
+    by_user = await repo.get_usage_by_user()
+    return {"summary": summary, "by_user": by_user}
 
 
 @router.get("/queries")
@@ -29,9 +30,8 @@ async def get_query_log(
     user_id: uuid.UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Query log with latency, token counts, and cost per query.
-    Week 4: Full query log with pagination implemented here.
-    """
+    """Recent query log with latency, token counts, and cost."""
     logger.debug("admin.queries.request", user_id=str(user_id))
-    return {"status": "query log implemented in Week 4"}
+    repo = ChatRepository(db)
+    queries = await repo.get_recent_query_log(limit=50)
+    return {"queries": queries}

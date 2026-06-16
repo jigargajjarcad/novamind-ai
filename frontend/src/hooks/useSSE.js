@@ -3,14 +3,12 @@ import { useAuthStore } from '../store/authStore'
 
 export function useSSE() {
   const [streaming, setStreaming] = useState(false)
-  const eventSourceRef = useRef(null)
+  const readerRef = useRef(null)
   const token = useAuthStore((s) => s.token)
 
   const close = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-    }
+    readerRef.current?.cancel()
+    readerRef.current = null
     setStreaming(false)
   }, [])
 
@@ -31,13 +29,14 @@ export function useSSE() {
       })
         .then(async (res) => {
           if (!res.ok) {
-            const err = await res.json().catch(() => ({ message: 'Stream error' }))
+            const err = await res.json().catch(() => ({ message: 'Stream request failed' }))
             onError?.(err)
             setStreaming(false)
             return
           }
 
           const reader = res.body.getReader()
+          readerRef.current = reader
           const decoder = new TextDecoder()
           let buffer = ''
 
@@ -46,31 +45,54 @@ export function useSSE() {
             if (done) break
 
             buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
 
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue
-              const raw = line.slice(6).trim()
-              if (!raw || raw === '[DONE]') continue
+            // SSE blocks are delimited by double newline
+            const blocks = buffer.split('\n\n')
+            buffer = blocks.pop() ?? ''
+
+            for (const block of blocks) {
+              if (!block.trim()) continue
+
+              let eventName = ''
+              let dataStr = ''
+
+              for (const line of block.split('\n')) {
+                if (line.startsWith('event: ')) {
+                  eventName = line.slice(7).trim()
+                } else if (line.startsWith('data: ')) {
+                  dataStr = line.slice(6).trim()
+                }
+              }
+
+              if (!dataStr) continue
 
               try {
-                const parsed = JSON.parse(raw)
-                if (parsed.type === 'chunk') onChunk?.(parsed.text)
-                if (parsed.type === 'citations') onCitations?.(parsed.data)
-                if (parsed.type === 'done') {
-                  onDone?.(parsed.data)
+                const parsed = JSON.parse(dataStr)
+
+                if (eventName === 'chunk') {
+                  onChunk?.(parsed.text ?? '')
+                } else if (eventName === 'citations') {
+                  // parsed is the citations array directly
+                  onCitations?.(Array.isArray(parsed) ? parsed : [])
+                } else if (eventName === 'done') {
+                  onDone?.(parsed)
+                  setStreaming(false)
+                } else if (eventName === 'error') {
+                  onError?.(parsed)
                   setStreaming(false)
                 }
               } catch {
-                // non-JSON SSE line — ignore
+                // non-JSON SSE data — ignore
               }
             }
           }
+
           setStreaming(false)
         })
         .catch((err) => {
-          onError?.(err)
+          if (err.name !== 'AbortError') {
+            onError?.({ message: err.message ?? 'Connection failed' })
+          }
           setStreaming(false)
         })
     },

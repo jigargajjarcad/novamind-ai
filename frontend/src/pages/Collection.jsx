@@ -6,7 +6,7 @@ import UploadDropzone from '../components/documents/UploadDropzone'
 import Button from '../components/shared/Button'
 import collectionService from '../services/collectionService'
 import chatService from '../services/chatService'
-import { useUploadDocument } from '../hooks/useDocuments'
+import { useDocuments, useUploadDocument } from '../hooks/useDocuments'
 
 export default function Collection() {
   const { id } = useParams()
@@ -18,6 +18,12 @@ export default function Collection() {
     queryKey: ['collection', id],
     queryFn: () => collectionService.getById(id),
   })
+
+  const { data: documents = [] } = useDocuments(id)
+
+  const readyCount = documents.filter((d) => d.status === 'ready').length
+  const processingCount = documents.filter((d) => d.status === 'pending' || d.status === 'processing').length
+  const canChat = readyCount > 0
 
   const createSessionMutation = useMutation({
     mutationFn: () => chatService.createSession({ collection_id: id, name: `Session ${new Date().toLocaleDateString()}` }),
@@ -39,12 +45,24 @@ export default function Collection() {
             <p className="text-gray-400 text-sm mt-1">{collection.description}</p>
           )}
         </div>
-        <Button
-          onClick={() => createSessionMutation.mutate()}
-          disabled={createSessionMutation.isPending}
-        >
-          {createSessionMutation.isPending ? 'Starting…' : 'Start Chat →'}
-        </Button>
+
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() => createSessionMutation.mutate()}
+            disabled={createSessionMutation.isPending || !canChat}
+            title={!canChat ? 'Upload and process at least one document before chatting' : undefined}
+          >
+            {createSessionMutation.isPending ? 'Starting…' : 'Start Chat →'}
+          </Button>
+          {!canChat && documents.length > 0 && processingCount > 0 && (
+            <p className="text-xs text-yellow-500">
+              {processingCount} document{processingCount !== 1 ? 's' : ''} still processing…
+            </p>
+          )}
+          {!canChat && documents.length === 0 && (
+            <p className="text-xs text-gray-500">Upload a document to get started</p>
+          )}
+        </div>
       </div>
 
       <UploadDropzone
