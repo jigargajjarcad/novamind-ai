@@ -45,6 +45,8 @@ export default function Admin() {
   const summary = usage?.summary ?? {}
   const byUser = usage?.by_user ?? []
   const queries = logData?.queries ?? []
+  const currentUserId = usage?.current_user_id ?? null
+  const myUsage = usage?.my_usage ?? null
 
   return (
     <PageWrapper title="Admin">
@@ -59,7 +61,30 @@ export default function Admin() {
         <p className="text-gray-400 text-sm mt-1">Token usage, query latency, and cost per user.</p>
       </div>
 
-      {/* Summary stats */}
+      {/* My Usage */}
+      {(myUsage || usageLoading) && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">My Usage</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            <StatCard
+              label="My Queries"
+              value={usageLoading ? '…' : fmt(myUsage?.query_count ?? 0)}
+            />
+            <StatCard
+              label="My Tokens"
+              value={usageLoading ? '…' : fmt((myUsage?.total_input_tokens ?? 0) + (myUsage?.total_output_tokens ?? 0))}
+              sub={myUsage ? `${fmt(myUsage.total_input_tokens)} in · ${fmt(myUsage.total_output_tokens)} out` : undefined}
+            />
+            <StatCard
+              label="My Cost"
+              value={usageLoading ? '…' : fmtCost(myUsage?.total_cost_usd ?? 0)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Platform summary stats */}
+      <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">Platform Totals</h2>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Total Queries"
@@ -100,15 +125,28 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {byUser.map((row) => (
-                  <tr key={row.email} className="hover:bg-gray-800/50 transition-colors">
-                    <td className="px-4 py-3 text-gray-300">{row.email}</td>
-                    <td className="px-4 py-3 text-right text-gray-300">{fmt(row.query_count)}</td>
-                    <td className="px-4 py-3 text-right text-gray-400">{fmt(row.total_input_tokens)}</td>
-                    <td className="px-4 py-3 text-right text-gray-400">{fmt(row.total_output_tokens)}</td>
-                    <td className="px-4 py-3 text-right text-indigo-400 font-medium">{fmtCost(row.total_cost_usd)}</td>
-                  </tr>
-                ))}
+                {byUser.map((row) => {
+                  const isMe = row.user_id === currentUserId
+                  return (
+                    <tr
+                      key={row.email}
+                      className={`transition-colors ${isMe ? 'bg-indigo-950/40 hover:bg-indigo-950/60' : 'hover:bg-gray-800/50'}`}
+                    >
+                      <td className="px-4 py-3 text-gray-300">
+                        <span>{row.email}</span>
+                        {isMe && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                            You
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-300">{fmt(row.query_count)}</td>
+                      <td className="px-4 py-3 text-right text-gray-400">{fmt(row.total_input_tokens)}</td>
+                      <td className="px-4 py-3 text-right text-gray-400">{fmt(row.total_output_tokens)}</td>
+                      <td className="px-4 py-3 text-right text-indigo-400 font-medium">{fmtCost(row.total_cost_usd)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

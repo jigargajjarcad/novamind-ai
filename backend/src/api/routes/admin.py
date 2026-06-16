@@ -22,7 +22,14 @@ async def get_usage(
     repo = ChatRepository(db)
     summary = await repo.get_summary_stats()
     by_user = await repo.get_usage_by_user()
-    return {"summary": summary, "by_user": by_user}
+    current_user_id_str = str(user_id)
+    my_usage = next((row for row in by_user if row["user_id"] == current_user_id_str), None)
+    return {
+        "summary": summary,
+        "by_user": by_user,
+        "current_user_id": current_user_id_str,
+        "my_usage": my_usage,
+    }
 
 
 @router.get("/queries")

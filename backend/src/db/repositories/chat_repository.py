@@ -105,6 +105,7 @@ class ChatRepository:
     async def get_usage_by_user(self) -> list[dict]:
         result = await self.db.execute(
             select(
+                User.id.label("user_id"),
                 User.email,
                 func.count(QueryLog.id).label("query_count"),
                 func.coalesce(func.sum(QueryLog.input_tokens), 0).label("total_input_tokens"),
@@ -113,11 +114,12 @@ class ChatRepository:
             )
             .select_from(QueryLog)
             .join(User, QueryLog.user_id == User.id)
-            .group_by(User.email)
+            .group_by(User.id, User.email)
             .order_by(func.sum(QueryLog.cost_usd).desc())
         )
         return [
             {
+                "user_id": str(row.user_id),
                 "email": row.email,
                 "query_count": row.query_count,
                 "total_input_tokens": int(row.total_input_tokens),
