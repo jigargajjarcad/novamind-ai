@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Collection from './pages/Collection'
 import Chat from './pages/Chat'
 import Admin from './pages/Admin'
+import VerifyEmail from './pages/VerifyEmail'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/collections/:id" element={<ProtectedRoute><Collection /></ProtectedRoute>} />
           <Route path="/chat/:sessionId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

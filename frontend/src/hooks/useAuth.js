@@ -13,8 +13,16 @@ export function useAuth() {
   }
 
   async function register(data) {
-    const { user, token } = await authService.register(data)
-    setAuth(token, user)
+    // Registration no longer auto-logs in — user must verify email first
+    const { user } = await authService.register(data)
+    return user
+  }
+
+  async function verifyEmail(token) {
+    const { token: jwt } = await authService.verifyEmail(token)
+    setAuth(jwt, null)
+    const user = await authService.getMe()
+    setAuth(jwt, user)
     return user
   }
 
@@ -28,6 +36,7 @@ export function useAuth() {
     isAuthenticated: !!token,
     login,
     register,
+    verifyEmail,
     logout,
   }
 }

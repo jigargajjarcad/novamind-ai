@@ -1,14 +1,28 @@
+import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, UserResponse
-from src.core.exceptions import EmailAlreadyExistsError, InvalidCredentialsError, UserNotFoundError
+from src.core.exceptions import (
+    EmailAlreadyExistsError,
+    EmailNotVerifiedError,
+    InvalidCredentialsError,
+    RateLimitError,
+    TokenExpiredError,
+    TokenInvalidError,
+    UserNotFoundError,
+)
 from src.core.security import create_access_token, hash_password, verify_password
 from src.db.repositories.user_repository import UserRepository
+from src.services import email_service
 
 logger = structlog.get_logger()
+
+_VERIFICATION_TTL_HOURS = 24
+_RESEND_COOLDOWN_SECONDS = 60
 
 
 class AuthService:
@@ -20,20 +34,21 @@ class AuthService:
         if existing:
             raise EmailAlreadyExistsError(f"Email {data.email} is already registered")
 
-        password_hash = hash_password(data.password)
         user = await self.user_repo.create(
             email=data.email,
-            password_hash=password_hash,
+            password_hash=hash_password(data.password),
             full_name=data.full_name,
         )
 
-        token, _ = create_access_token(user.id)
+        token = secrets.token_urlsafe(32)
+        user.verification_token = token
+        user.verification_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=_VERIFICATION_TTL_HOURS)
+        await self.user_repo.save(user)
+
+        await email_service.send_verification_email(user.email, user.full_name, token)
         logger.info("auth.register.success", user_id=str(user.id), email=user.email)
 
-        return RegisterResponse(
-            user=UserResponse.model_validate(user),
-            token=token,
-        )
+        return RegisterResponse(user=UserResponse.model_validate(user))
 
     async def login(self, data: LoginRequest) -> LoginResponse:
         user = await self.user_repo.get_by_email(data.email)
@@ -41,10 +56,52 @@ class AuthService:
             logger.warning("auth.login.failed", email=data.email)
             raise InvalidCredentialsError("Invalid email or password")
 
-        token, expires_at = create_access_token(user.id)
-        logger.info("auth.login.success", user_id=str(user.id))
+        if not user.is_verified:
+            logger.warning("auth.login.unverified", user_id=str(user.id))
+            raise EmailNotVerifiedError("Please verify your email before signing in")
 
-        return LoginResponse(token=token, expires_at=expires_at)
+        jwt, expires_at = create_access_token(user.id)
+        logger.info("auth.login.success", user_id=str(user.id))
+        return LoginResponse(token=jwt, expires_at=expires_at)
+
+    async def verify_email(self, token: str) -> LoginResponse:
+        user = await self.user_repo.get_by_verification_token(token)
+        if not user:
+            raise TokenInvalidError("Verification token is invalid")
+
+        now = datetime.now(timezone.utc)
+        if not user.verification_token_expires_at or user.verification_token_expires_at < now:
+            raise TokenExpiredError("Verification token has expired. Request a new one.")
+
+        user.is_verified = True
+        user.verification_token = None
+        user.verification_token_expires_at = None
+        await self.user_repo.save(user)
+
+        jwt, expires_at = create_access_token(user.id)
+        logger.info("auth.verify_email.success", user_id=str(user.id))
+        return LoginResponse(token=jwt, expires_at=expires_at)
+
+    async def resend_verification(self, email: str) -> None:
+        user = await self.user_repo.get_by_email(email)
+        # Never reveal whether the email exists or is already verified
+        if not user or user.is_verified:
+            return
+
+        # Rate-limit: token was generated at (expires_at - 24h), reject if < 60s ago
+        if user.verification_token_expires_at:
+            sent_at = user.verification_token_expires_at - timedelta(hours=_VERIFICATION_TTL_HOURS)
+            elapsed = (datetime.now(timezone.utc) - sent_at).total_seconds()
+            if elapsed < _RESEND_COOLDOWN_SECONDS:
+                raise RateLimitError("Please wait before requesting another verification email")
+
+        token = secrets.token_urlsafe(32)
+        user.verification_token = token
+        user.verification_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=_VERIFICATION_TTL_HOURS)
+        await self.user_repo.save(user)
+
+        await email_service.send_verification_email(user.email, user.full_name, token)
+        logger.info("auth.resend_verification.success", user_id=str(user.id))
 
     async def get_current_user(self, user_id: uuid.UUID) -> UserResponse:
         user = await self.user_repo.get_by_id(user_id)

@@ -18,9 +18,21 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
 
+    async def get_by_verification_token(self, token: str) -> User | None:
+        result = await self.db.execute(
+            select(User).where(User.verification_token == token)
+        )
+        return result.scalar_one_or_none()
+
     async def create(self, email: str, password_hash: str, full_name: str | None = None) -> User:
         user = User(email=email, password_hash=password_hash, full_name=full_name)
         self.db.add(user)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
+
+    async def save(self, user: User) -> User:
+        """Commit in-place mutations to an already-tracked User and return it."""
         await self.db.commit()
         await self.db.refresh(user)
         return user

@@ -32,9 +32,17 @@ class UserResponse(BaseModel):
 
 class RegisterResponse(BaseModel):
     user: UserResponse
-    token: str
+    message: str = "Verification email sent. Please check your inbox."
 
 
 class LoginResponse(BaseModel):
     token: str
     expires_at: datetime
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr

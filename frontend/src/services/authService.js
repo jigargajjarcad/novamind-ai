@@ -15,6 +15,15 @@ const authService = {
     const res = await api.get('/auth/me')
     return res.data
   },
+
+  async verifyEmail(token) {
+    const res = await api.post('/auth/verify-email', { token })
+    return res.data
+  },
+
+  async resendVerification(email) {
+    await api.post('/auth/resend-verification', { email })
+  },
 }
 
 export default authService

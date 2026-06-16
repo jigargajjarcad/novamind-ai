@@ -64,3 +64,22 @@ class DocumentProcessingError(AppException):
 
 class ChatSessionNotFoundError(NotFoundError):
     code = "CHAT_SESSION_NOT_FOUND"
+
+
+class EmailNotVerifiedError(ForbiddenError):
+    code = "EMAIL_NOT_VERIFIED"
+
+
+class TokenInvalidError(AppException):
+    code = "TOKEN_INVALID"
+    status_code = 400
+
+
+class TokenExpiredError(AppException):
+    code = "TOKEN_EXPIRED"
+    status_code = 400
+
+
+class RateLimitError(AppException):
+    code = "RATE_LIMITED"
+    status_code = 429

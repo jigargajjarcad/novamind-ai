@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     TOP_K_RERANK: int = 5
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    RESEND_API_KEY: str
+    RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
+    FRONTEND_URL: str = "http://localhost:3000"
 
 
 settings = Settings()

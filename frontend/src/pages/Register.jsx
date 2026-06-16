@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Register() {
   const [form, setForm] = useState({ email: '', password: '', full_name: '' })
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
+  const [registered, setRegistered] = useState(false)
   const { register } = useAuth()
 
   function handleChange(e) {
@@ -19,12 +19,38 @@ export default function Register() {
     setLoading(true)
     try {
       await register(form)
-      navigate('/dashboard')
+      setRegistered(true)
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Registration failed.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (registered) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="w-14 h-14 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-6">
+            <svg className="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
+          <p className="text-gray-400 text-sm mb-1">
+            We sent a verification link to
+          </p>
+          <p className="text-white font-medium text-sm mb-6">{form.email}</p>
+          <p className="text-gray-500 text-xs mb-8">
+            Click the link in the email to activate your account. The link expires in 24 hours.
+          </p>
+          <Link to="/login" className="text-indigo-400 hover:text-indigo-300 text-sm">
+            Back to sign in
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
