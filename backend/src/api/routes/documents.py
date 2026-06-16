@@ -82,7 +82,7 @@ async def list_documents(
     return await service.list_for_collection(collection_id, user_id)
 
 
-@router.get("/{document_id}", response_model=DocumentDetailResponse, tags=["documents"])
+@router.get("/documents/{document_id}", response_model=DocumentDetailResponse, tags=["documents"])
 async def get_document(
     document_id: uuid.UUID,
     user_id: uuid.UUID = Depends(get_current_user_id),
@@ -93,7 +93,7 @@ async def get_document(
     return await service.get(document_id, user_id)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"])
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["documents"])
 async def delete_document(
     document_id: uuid.UUID,
     user_id: uuid.UUID = Depends(get_current_user_id),
