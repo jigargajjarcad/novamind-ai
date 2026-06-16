@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import PageWrapper from '../components/layout/PageWrapper'
 import DocumentList from '../components/documents/DocumentList'
 import UploadDropzone from '../components/documents/UploadDropzone'
@@ -11,10 +11,9 @@ import { useDocuments, useUploadDocument } from '../hooks/useDocuments'
 export default function Collection() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const uploadMutation = useUploadDocument(id)
 
-  const { data: collection, isLoading } = useQuery({
+  const { data: collection } = useQuery({
     queryKey: ['collection', id],
     queryFn: () => collectionService.getById(id),
   })
@@ -25,8 +24,20 @@ export default function Collection() {
   const processingCount = documents.filter((d) => d.status === 'pending' || d.status === 'processing').length
   const canChat = readyCount > 0
 
-  const createSessionMutation = useMutation({
-    mutationFn: () => chatService.createSession({ collection_id: id, name: `Session ${new Date().toLocaleDateString()}` }),
+  // Navigate to the most recent existing session for this collection, or create a new one.
+  // Prevents accumulating empty sessions every time "Start Chat" is clicked.
+  const startChatMutation = useMutation({
+    mutationFn: async () => {
+      const sessions = await chatService.listSessions()
+      const existing = sessions
+        .filter((s) => s.collection_id === id)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+      if (existing) return existing
+      return chatService.createSession({
+        collection_id: id,
+        name: `Session ${new Date().toLocaleDateString()}`,
+      })
+    },
     onSuccess: (session) => navigate(`/chat/${session.id}`),
   })
 
@@ -48,12 +59,15 @@ export default function Collection() {
 
         <div className="flex flex-col items-end gap-1">
           <Button
-            onClick={() => createSessionMutation.mutate()}
-            disabled={createSessionMutation.isPending || !canChat}
+            onClick={() => startChatMutation.mutate()}
+            disabled={startChatMutation.isPending || !canChat}
             title={!canChat ? 'Upload and process at least one document before chatting' : undefined}
           >
-            {createSessionMutation.isPending ? 'Starting…' : 'Start Chat →'}
+            {startChatMutation.isPending ? 'Starting…' : 'Start Chat →'}
           </Button>
+          {startChatMutation.isError && (
+            <p className="text-xs text-red-400">Failed to start chat. Try again.</p>
+          )}
           {!canChat && documents.length > 0 && processingCount > 0 && (
             <p className="text-xs text-yellow-500">
               {processingCount} document{processingCount !== 1 ? 's' : ''} still processing…
