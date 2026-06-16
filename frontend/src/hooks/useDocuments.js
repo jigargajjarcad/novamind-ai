@@ -6,8 +6,9 @@ export function useDocuments(collectionId) {
     queryKey: ['documents', collectionId],
     queryFn: () => documentService.listByCollection(collectionId),
     enabled: !!collectionId,
-    refetchInterval: (data) => {
-      const hasPending = data?.some((d) => d.status === 'pending' || d.status === 'processing')
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const hasPending = Array.isArray(data) && data.some((d) => d.status === 'pending' || d.status === 'processing')
       return hasPending ? 3000 : false
     },
   })
