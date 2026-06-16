@@ -26,6 +26,7 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str | None
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 

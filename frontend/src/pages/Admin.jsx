@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageWrapper from '../components/layout/PageWrapper'
+import { useAuthStore } from '../store/authStore'
 import adminService from '../services/adminService'
 
 function StatCard({ label, value, sub }) {
@@ -30,6 +32,13 @@ function fmtDate(iso) {
 
 export default function Admin() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+
+  useEffect(() => {
+    if (user && !user.is_admin) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [user, navigate])
   const { data: usage, isLoading: usageLoading } = useQuery({
     queryKey: ['admin-usage'],
     queryFn: adminService.getUsage,

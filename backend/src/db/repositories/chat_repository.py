@@ -81,6 +81,53 @@ class ChatRepository:
         )
         return result.scalar() or 0
 
+    async def get_usage_stats_for_user(self, user_id: uuid.UUID) -> dict:
+        result = await self.db.execute(
+            select(
+                func.count(QueryLog.id).label("query_count"),
+                func.coalesce(func.sum(QueryLog.input_tokens), 0).label("total_input_tokens"),
+                func.coalesce(func.sum(QueryLog.output_tokens), 0).label("total_output_tokens"),
+                func.coalesce(func.sum(QueryLog.cost_usd), 0).label("total_cost_usd"),
+            ).where(QueryLog.user_id == user_id)
+        )
+        row = result.one()
+        return {
+            "query_count": row.query_count,
+            "total_input_tokens": int(row.total_input_tokens),
+            "total_output_tokens": int(row.total_output_tokens),
+            "total_cost_usd": float(row.total_cost_usd),
+        }
+
+    async def get_recent_queries_for_user(self, user_id: uuid.UUID, limit: int = 10) -> list[dict]:
+        result = await self.db.execute(
+            select(
+                QueryLog.id,
+                QueryLog.query,
+                QueryLog.chunks_retrieved,
+                QueryLog.input_tokens,
+                QueryLog.output_tokens,
+                QueryLog.cost_usd,
+                QueryLog.latency_ms,
+                QueryLog.created_at,
+            )
+            .where(QueryLog.user_id == user_id)
+            .order_by(QueryLog.created_at.desc())
+            .limit(limit)
+        )
+        return [
+            {
+                "id": str(row.id),
+                "query": row.query[:100] + "…" if len(row.query) > 100 else row.query,
+                "chunks_retrieved": row.chunks_retrieved,
+                "input_tokens": row.input_tokens,
+                "output_tokens": row.output_tokens,
+                "cost_usd": float(row.cost_usd) if row.cost_usd is not None else None,
+                "latency_ms": row.latency_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in result.all()
+        ]
+
     # --- Admin aggregation queries ---
 
     async def get_summary_stats(self) -> dict:

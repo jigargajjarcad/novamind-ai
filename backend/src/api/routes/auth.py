@@ -81,6 +81,15 @@ async def update_profile(
     return await service.update_profile(user_id, body)
 
 
+@router.get("/my-usage")
+async def get_my_usage(
+    user_id: uuid.UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AuthService(db)
+    return await service.get_my_usage(user_id)
+
+
 @router.patch("/password", status_code=204)
 async def change_password(
     body: UpdatePasswordRequest,

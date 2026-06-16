@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.security import get_current_user_id
+from src.core.security import get_current_admin_user
 from src.db.database import get_db
 from src.db.repositories.chat_repository import ChatRepository
 
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/usage")
 async def get_usage(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Aggregated token usage and cost: summary stats + per-user breakdown."""
@@ -34,7 +34,7 @@ async def get_usage(
 
 @router.get("/queries")
 async def get_query_log(
-    user_id: uuid.UUID = Depends(get_current_user_id),
+    user_id: uuid.UUID = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Recent query log with latency, token counts, and cost."""

@@ -70,6 +70,10 @@ class EmailNotVerifiedError(ForbiddenError):
     code = "EMAIL_NOT_VERIFIED"
 
 
+class AdminRequiredError(ForbiddenError):
+    code = "ADMIN_REQUIRED"
+
+
 class InvalidPasswordError(AppException):
     code = "INVALID_PASSWORD"
     status_code = 400

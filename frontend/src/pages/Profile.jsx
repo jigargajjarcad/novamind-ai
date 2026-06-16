@@ -40,6 +40,21 @@ function labelClass() {
   return 'block text-sm font-medium text-gray-300 mb-1.5'
 }
 
+function fmt(n) {
+  if (n == null) return '—'
+  return Number(n).toLocaleString()
+}
+
+function fmtCost(usd) {
+  if (usd == null) return '—'
+  return `$${Number(usd).toFixed(4)}`
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export default function Profile() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -49,6 +64,11 @@ export default function Profile() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: authService.getProfile,
+  })
+
+  const { data: myUsage, isLoading: usageLoading } = useQuery({
+    queryKey: ['my-usage'],
+    queryFn: authService.getMyUsage,
   })
 
   // Personal info form
@@ -73,7 +93,6 @@ export default function Profile() {
     setProfileStatus(null)
     try {
       const updated = await authService.updateProfile({ full_name: fullName })
-      // Refresh auth store so navbar name updates immediately
       setAuth(token, updated)
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       setProfileStatus({ type: 'success', message: 'Name updated successfully.' })
@@ -115,9 +134,11 @@ export default function Profile() {
     return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
   }
 
+  const recentQueries = myUsage?.recent_queries ?? []
+
   return (
     <PageWrapper title="Profile">
-      <div className="max-w-xl">
+      <div className="max-w-2xl">
         <div className="mb-6">
           <button
             onClick={() => navigate('/dashboard')}
@@ -224,18 +245,77 @@ export default function Profile() {
               </form>
             </Section>
 
-            {/* Account Stats */}
-            <Section title="Account stats">
+            {/* Account */}
+            <Section title="Account">
               <dl className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-gray-800">
+                <div className="flex items-center justify-between py-2">
                   <dt className="text-sm text-gray-400">Member since</dt>
                   <dd className="text-sm text-white">{fmtDate(profile?.stats?.member_since)}</dd>
                 </div>
-                <div className="flex items-center justify-between py-2">
-                  <dt className="text-sm text-gray-400">Total queries run</dt>
-                  <dd className="text-sm text-white font-medium">{profile?.stats?.total_queries ?? 0}</dd>
-                </div>
               </dl>
+            </Section>
+
+            {/* My Usage */}
+            <Section title="My usage" description="Your personal token and cost summary.">
+              {usageLoading ? (
+                <div className="h-16 animate-pulse bg-gray-800 rounded-lg" />
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Queries', value: fmt(myUsage?.total_queries ?? 0) },
+                    {
+                      label: 'Tokens',
+                      value: fmt((myUsage?.total_input_tokens ?? 0) + (myUsage?.total_output_tokens ?? 0)),
+                      sub: `${fmt(myUsage?.total_input_tokens ?? 0)} in · ${fmt(myUsage?.total_output_tokens ?? 0)} out`,
+                    },
+                    { label: 'Cost', value: fmtCost(myUsage?.total_cost_usd ?? 0) },
+                  ].map(({ label, value, sub }) => (
+                    <div key={label} className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                      <p className="text-xl font-bold text-white">{value}</p>
+                      {sub && <p className="text-xs text-gray-600 mt-0.5">{sub}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Recent Queries */}
+            <Section title="Recent queries" description="Your last 10 queries across all collections.">
+              {usageLoading ? (
+                <div className="h-24 animate-pulse bg-gray-800 rounded-lg" />
+              ) : recentQueries.length === 0 ? (
+                <p className="text-gray-500 text-sm">No queries yet. Start a chat to see your activity here.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase tracking-wide">
+                        <th className="text-left px-2 py-2 font-medium">Query</th>
+                        <th className="text-right px-2 py-2 font-medium">Tokens</th>
+                        <th className="text-right px-2 py-2 font-medium">Cost</th>
+                        <th className="text-right px-2 py-2 font-medium">Latency</th>
+                        <th className="text-right px-2 py-2 font-medium">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {recentQueries.map((q) => (
+                        <tr key={q.id} className="hover:bg-gray-800/50 transition-colors">
+                          <td className="px-2 py-2.5 text-gray-300 max-w-[14rem] truncate" title={q.query}>{q.query}</td>
+                          <td className="px-2 py-2.5 text-right text-gray-400 tabular-nums">
+                            {q.input_tokens != null ? fmt((q.input_tokens ?? 0) + (q.output_tokens ?? 0)) : '—'}
+                          </td>
+                          <td className="px-2 py-2.5 text-right text-indigo-400 tabular-nums">{fmtCost(q.cost_usd)}</td>
+                          <td className="px-2 py-2.5 text-right text-gray-400 tabular-nums">
+                            {q.latency_ms != null ? `${fmt(q.latency_ms)}ms` : '—'}
+                          </td>
+                          <td className="px-2 py-2.5 text-right text-gray-500 text-xs whitespace-nowrap">{fmtDateTime(q.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </Section>
 
           </div>

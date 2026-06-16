@@ -143,6 +143,17 @@ class AuthService:
         logger.info("auth.profile.updated", user_id=str(user_id))
         return UserResponse.model_validate(user)
 
+    async def get_my_usage(self, user_id: uuid.UUID) -> dict:
+        stats = await self.chat_repo.get_usage_stats_for_user(user_id)
+        recent = await self.chat_repo.get_recent_queries_for_user(user_id, limit=10)
+        return {
+            "total_queries": stats["query_count"],
+            "total_input_tokens": stats["total_input_tokens"],
+            "total_output_tokens": stats["total_output_tokens"],
+            "total_cost_usd": stats["total_cost_usd"],
+            "recent_queries": recent,
+        }
+
     async def change_password(self, user_id: uuid.UUID, data: UpdatePasswordRequest) -> None:
         user = await self.user_repo.get_by_id(user_id)
         if not user:

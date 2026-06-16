@@ -38,6 +38,11 @@ const authService = {
   async changePassword(data) {
     await api.patch('/auth/password', data)
   },
+
+  async getMyUsage() {
+    const res = await api.get('/auth/my-usage')
+    return res.data
+  },
 }
 
 export default authService

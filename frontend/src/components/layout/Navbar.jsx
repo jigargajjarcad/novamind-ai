@@ -25,9 +25,11 @@ export default function Navbar() {
             {user.full_name}
           </Link>
         )}
-        <Link to="/admin" className="text-gray-400 hover:text-white text-sm transition-colors">
-          Admin
-        </Link>
+        {user?.is_admin && (
+          <Link to="/admin" className="text-gray-400 hover:text-white text-sm transition-colors">
+            Admin
+          </Link>
+        )}
         <button
           onClick={handleLogout}
           className="text-gray-400 hover:text-white text-sm transition-colors"
