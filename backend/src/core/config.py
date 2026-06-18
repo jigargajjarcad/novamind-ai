@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = _DEFAULT_ALLOWED_ORIGINS
     RESEND_API_KEY: str
     RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
