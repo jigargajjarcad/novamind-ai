@@ -43,6 +43,14 @@ const authService = {
     const res = await api.get('/auth/my-usage')
     return res.data
   },
+
+  async forgotPassword(email) {
+    await api.post('/auth/forgot-password', { email })
+  },
+
+  async resetPassword(token, new_password) {
+    await api.post('/auth/reset-password', { token, new_password })
+  },
 }
 
 export default authService

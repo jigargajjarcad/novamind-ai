@@ -24,6 +24,12 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_password_reset_token(self, token: str) -> User | None:
+        result = await self.db.execute(
+            select(User).where(User.password_reset_token == token)
+        )
+        return result.scalar_one_or_none()
+
     async def create(self, email: str, password_hash: str, full_name: str | None = None) -> User:
         user = User(email=email, password_hash=password_hash, full_name=full_name)
         self.db.add(user)

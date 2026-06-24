@@ -5,12 +5,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.schemas.auth import (
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     ProfileResponse,
     RegisterRequest,
     RegisterResponse,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     UpdatePasswordRequest,
     UpdateProfileRequest,
     UserResponse,
@@ -99,3 +101,19 @@ async def change_password(
     logger.debug("auth.password.change_request", user_id=str(user_id))
     service = AuthService(db)
     await service.change_password(user_id, body)
+
+
+@router.post("/forgot-password", status_code=200)
+async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    logger.debug("auth.forgot_password.request")
+    service = AuthService(db)
+    await service.forgot_password(body)
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password", status_code=200)
+async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    logger.debug("auth.reset_password.request")
+    service = AuthService(db)
+    await service.reset_password(body)
+    return {"message": "Password reset successfully."}

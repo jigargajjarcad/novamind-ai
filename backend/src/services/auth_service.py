@@ -6,12 +6,14 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.schemas.auth import (
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     ProfileResponse,
     ProfileStatsResponse,
     RegisterRequest,
     RegisterResponse,
+    ResetPasswordRequest,
     UpdatePasswordRequest,
     UpdateProfileRequest,
     UserResponse,
@@ -35,6 +37,7 @@ logger = structlog.get_logger()
 
 _VERIFICATION_TTL_HOURS = 24
 _RESEND_COOLDOWN_SECONDS = 60
+_PASSWORD_RESET_TTL_HOURS = 1
 
 
 class AuthService:
@@ -164,3 +167,33 @@ class AuthService:
         user.password_hash = hash_password(data.new_password)
         await self.user_repo.save(user)
         logger.info("auth.password.changed", user_id=str(user_id))
+
+    async def forgot_password(self, data: ForgotPasswordRequest) -> None:
+        user = await self.user_repo.get_by_email(data.email)
+        if not user or not user.is_verified:
+            # Always return 200 — do not reveal whether the email exists.
+            logger.info("auth.forgot_password.noop", email=data.email)
+            return
+
+        token = secrets.token_urlsafe(32)
+        user.password_reset_token = token
+        user.password_reset_token_expires_at = datetime.now(timezone.utc) + timedelta(hours=_PASSWORD_RESET_TTL_HOURS)
+        await self.user_repo.save(user)
+
+        await email_service.send_password_reset_email(user.email, user.full_name, token)
+        logger.info("auth.forgot_password.sent", user_id=str(user.id))
+
+    async def reset_password(self, data: ResetPasswordRequest) -> None:
+        user = await self.user_repo.get_by_password_reset_token(data.token)
+        if not user:
+            raise TokenInvalidError("Password reset token is invalid")
+
+        now = datetime.now(timezone.utc)
+        if not user.password_reset_token_expires_at or user.password_reset_token_expires_at < now:
+            raise TokenExpiredError("Password reset token has expired. Request a new one.")
+
+        user.password_hash = hash_password(data.new_password)
+        user.password_reset_token = None
+        user.password_reset_token_expires_at = None
+        await self.user_repo.save(user)
+        logger.info("auth.reset_password.success", user_id=str(user.id))
